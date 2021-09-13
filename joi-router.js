@@ -461,6 +461,43 @@ async function prepareRequest(ctx, next) {
 }
 
 /**
+ * unescape payload
+ *
+ * @api private
+ */
+function unescapePayload(input) {
+	// Null or undefined, just return input
+	if (typeof input === 'undefined' || input === null) {
+		return input;
+	}
+
+	var output;
+	var i;
+	var type = typeof input;
+
+	if (input instanceof Array) {
+		output = [];
+		for (i = 0; i < input.length; i++) {
+			output[i] = unescapePayload(input[i]);
+		}
+	} else if (type === 'object') {
+		output = {};
+		for (i in input) {
+			output[i] = unescapePayload(input[i]);
+		}
+	} else if (type === 'string') {
+        //prevent newline and quote
+		output = unescape(input.replaceAll("%0A", "\\n").replaceAll("%22", '\\"').replaceAll("%09", '\\t'));
+	} else if (type === 'number' || type === 'boolean') {
+		output = input;
+	} else {
+		output = input;
+	}
+
+	return output;
+};
+
+/**
  * Validates request[prop] data with the defined validation schema.
  *
  * @param {String} prop
@@ -474,7 +511,8 @@ function validateInput(prop, ctx, validate) {
   debug('validating %s', prop);
 
   const request = ctx.request;
-  const res = Joi.compile(validate[prop]).validate(request[prop], validate.validateOptions || {});
+  const unescapeInputs = unescapePayload(request[prop]);
+  const res = Joi.compile(validate[prop]).validate(unescapeInputs, validate.validateOptions || {});
 
   if (res.error) {
     res.error.status = validate.failure;
